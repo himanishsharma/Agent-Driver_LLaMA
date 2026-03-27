@@ -1,23 +1,43 @@
 from transformers import AutoTokenizer, AutoModelForVision2Seq
 from peft import PeftModel
 
-base_model = "Qwen/Qwen2.5-VL-3B-Instruct"
-adapter_path = "/home/jovyan/xz/LLaMA-Factory/saves/qwen2_5vl-3b/lora/sft/checkpoint-5848"
+class ChatLLAMA():
+    def __init__(self):
+        base_model = "Qwen/Qwen2.5-VL-3B-Instruct"
+        adapter_path = "/home/jovyan/xz/LLaMA-Factory/saves/qwen2_5vl-3b/lora/sft/checkpoint-5848"
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            base_model,
+            trust_remote_code=True
+        )
+        
+        model = AutoModelForVision2Seq.from_pretrained(
+            base_model,
+            device_map="auto",
+            trust_remote_code=True
+        )
+        
+        self.model = PeftModel.from_pretrained(model, adapter_path)
+        
+        print("Loaded VL model successfully ✅")
 
-# tokenizer
-tokenizer = AutoTokenizer.from_pretrained(
-    base_model,
-    trust_remote_code=True
-)
+    def chat(self, messages):
+        inputs = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+            return_tensors="pt"
+        )
+        
+        inputs = inputs.to(self.model.device)
 
-# ✅ correct model class
-model = AutoModelForVision2Seq.from_pretrained(
-    base_model,
-    device_map="auto",
-    trust_remote_code=True
-)
+        outputs = self.model.generate(
+            inputs,
+            max_new_tokens=200,
+            temperature=0.7,
+            do_sample=True
+        )
 
-# attach adapter
-model = PeftModel.from_pretrained(model, adapter_path)
+        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        response = response.split("assistant")[-1].strip()
 
-print("Loaded VL model successfully ✅")
+        return response
